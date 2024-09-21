@@ -18,7 +18,7 @@ history hst[250];
 void histry(){
   for(int i=0;i<cntr;i++){
     printf("Given command-%d was:%s\n",i+1,hst[i].cmd);
-    printf("Starting time for process:%s",ctime(&hst[i].initial_time));
+    printf("Starting time for process:%s\n",ctime(&hst[i].initial_time));
     printf("process pid is:%d\n",hst[i].pid);
     printf("process duration is:%f seconds\n",hst[i].duration);
     printf("\n");
