@@ -129,6 +129,7 @@ void pipeC(char *i) {
         exit(EXIT_FAILURE);
     }
     strcpy(cm, i);
+    time_t start_time=clock();
     
     char *commands[MAX_COMMANDS];
     int num_commands = 0;
