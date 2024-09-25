@@ -14,6 +14,7 @@
 #define MAX_COMMANDS 100
 #define MAX_ARGS 100
 
+//for storing history 
 typedef struct {
     char* cmd;
     int pid;
@@ -22,9 +23,14 @@ typedef struct {
     double duration;
 } history;
 
+//cntr for tracking number of commands executed
 int cntr = 0;
+
+//creating history array
 history hst[250];
 
+
+//fxn to print history
 void histry() {
     for (int i = 0; i < cntr; i++) {
         printf("Given command-%d was: %s\n", i + 1, hst[i].cmd);
@@ -37,6 +43,8 @@ void histry() {
         printf("\n");
     }
 }
+
+//required to remove '&' in background commands
 void remove_character(char *str, char char_to_remove) {
     int i, j = 0;
     int len = strlen(str);
@@ -50,16 +58,22 @@ void remove_character(char *str, char char_to_remove) {
     result[j] = '\0'; 
     strcpy(str, result);
 }
+
+// forking the chid and running the command 
 int create_and_run(char *command) {
+    //for calculating duration of command execuation
     clock_t start_time = clock();
+    //forking
     int child_st = fork();
+    //intitial time
     time_t initial_time;
     time(&initial_time);
-    
+    //Error check
     if (child_st < 0) {
         perror("Fork failed");
         exit(0);
     }
+    //checking if this is background process or not
     int background=0;
     if (strchr(command, '&')) {
         background = 1;
@@ -68,17 +82,21 @@ int create_and_run(char *command) {
     
     if (child_st == 0) {
         char *argv[1024];
+        //tokenising the command
         char *temp = strtok(command, " ");
+        //Error check
         if (temp == NULL) {
             printf("Error in tokenising string\n");
             exit(EXIT_FAILURE);
         }
+        //making a char* array for storing the commands
         int pos = 0;
         while (temp != NULL) {
             argv[pos++] = temp;
             temp = strtok(NULL, " ");
         }
         argv[pos] = NULL;
+        //Exec call and error check
         if (execvp(argv[0], argv) == -1) {
             printf("Exec error\n");
             exit(EXIT_FAILURE);
@@ -86,14 +104,18 @@ int create_and_run(char *command) {
         exit(1);
     } else {
         int status;
+        //If not background then waiting for child to terminate
         if(!background){
           if (waitpid(child_st, &status, 0) == -1) {
               printf("Wait failed\n");
               exit(EXIT_FAILURE);
             }
         }
+        //calculate end time for commmand execution
         clock_t end_time = clock();
+        //copying the command to store in history
         hst[cntr].cmd = malloc(strlen(command) + 1);
+        //Error check
         if (hst[cntr].cmd == NULL) {
             printf("Error in allocating size\n");
             exit(EXIT_FAILURE);
@@ -110,24 +132,31 @@ int create_and_run(char *command) {
     return 1;
 }
 
+//launching create and run fxn and also checking teh commands that cannot be handled by exec such as cd,history,exit 
 int launch(char *command) {
+    //checking wheather cd command
     if (strncmp(command, "cd", 2) == 0) {
+        //for storing history
         clock_t start_time = clock();
         time_t initial_time;
         time(&initial_time);
         char *dir = strtok(command + 3, " ");
+        //Error check
         if (dir == NULL) {
             dir = getenv("HOME");
         }
+        //error checking
         if (chdir(dir) != 0) {
             printf("cd failed\n");
             exit(EXIT_FAILURE);
         }
+        //for storing history
         hst[cntr].cmd = malloc(strlen(command) + 1);
         if (hst[cntr].cmd == NULL) {
             printf("Error in allocating size\n");
             exit(EXIT_FAILURE);
         }
+         //coping the command for storing in history
         strcpy(hst[cntr].cmd, command);
         hst[cntr].pid = getpid();
         hst[cntr].initial_time = initial_time;
@@ -136,15 +165,19 @@ int launch(char *command) {
         cntr++;
         return 1;
     } 
+    //checking wheather it is custom history command
     if (strcmp(command, "history") == 0) { 
+        //for storing history
         clock_t start_time = clock();
         time_t initial_time;
         time(&initial_time);
         hst[cntr].cmd = malloc(strlen(command) + 1);
+        //Error check
         if (hst[cntr].cmd == NULL) {
             printf("Error in allocating size\n");
             exit(EXIT_FAILURE);
         }
+        //coping the command for storing in history
         strcpy(hst[cntr].cmd, command);
         hst[cntr].pid = getpid();
         hst[cntr].initial_time = initial_time;
@@ -160,7 +193,7 @@ int launch(char *command) {
     }
     return create_and_run(command);
 }
-
+//for handling crtl+c signal and also sigchild such that background child does not get (zombie)
 void my_handler(int signum) {
     if(signum==SIGINT){
        printf("Exited Successfully \n");
@@ -168,10 +201,12 @@ void my_handler(int signum) {
        exit(0);
     }
     if(signum==SIGCHLD){
+        //to prevent child from becoming (zombie)
         while((waitpid(-1, NULL, WNOHANG) > 0));
     }
 }
 
+//for proper slicing
 void slice(char *s, char *t, int st, int en) {
     if (st <= en) {
         int o = 0;
@@ -184,6 +219,7 @@ void slice(char *s, char *t, int st, int en) {
 }
 
 void pipeC(char *i) {
+    //cheking wheather piped command is to be deal in background or not
     int background=0;
     if (strchr(i, '&')) {
         background = 1;
@@ -191,18 +227,22 @@ void pipeC(char *i) {
        remove_character(i, '&');
     }
     char *cmdd = malloc(strlen(i)+1);
+    if(cmdd==NULL){
+        printf("Error in malloc\n");
+        exit(EXIT_FAILURE);
+    }
     strcpy(cmdd,i);
     char *cm = strtok(i, "|");
     if (cm == NULL) {
         printf("Error in allocating space");
         exit(EXIT_FAILURE);
     }
+    //for calculating duration of command execution
     time_t start_time=clock();
     
     char *commands[MAX_COMMANDS];
     int num_commands = 0;
-    
-    //char *cmd = strtok(cm, "|");
+   // spliting the input string into individual commands
     while (cm != NULL && num_commands < MAX_COMMANDS) {
         commands[num_commands] = (char*)malloc(strlen(cm) + 1);
         if (commands[num_commands] == NULL) {
@@ -214,8 +254,9 @@ void pipeC(char *i) {
         num_commands++;
     }
 
-    int pipe_fd[2 * (num_commands - 1)];
+    int pipe_fd[2 * (num_commands - 1)]; // Create pipe file descriptors
 
+    // Create pipes
     for (int i = 0; i < num_commands - 1; i++) {
         if (pipe(pipe_fd + i * 2) == -1) {
             printf("Pipe creation failed\n");
@@ -224,23 +265,25 @@ void pipeC(char *i) {
     }
 
     pid_t pid;
+    // Fork and execute each command
     for (int i = 0; i < num_commands; i++) {
         pid = fork();
         if (pid < 0) {
             perror("Fork failed");
             exit(EXIT_FAILURE);
         } else if (pid == 0) {
-            if (i > 0) { 
-                dup2(pipe_fd[(i - 1) * 2], 0); 
+            // Child process
+            if (i > 0) { // If not the first command, get input from the previous pipe
+                dup2(pipe_fd[(i - 1) * 2], 0); // Read end of the previous pipe
             }
-            if (i < num_commands - 1) { 
-                dup2(pipe_fd[i * 2 + 1], 1); 
+            if (i < num_commands - 1) { // If not the last command, output to the next pipe
+                dup2(pipe_fd[i * 2 + 1], 1); // Write end of the current pipe
             }
-
+            // Close all pipe fds in the child
             for (int j = 0; j < 2 * (num_commands - 1); j++) {
                 close(pipe_fd[j]);
             }
-
+             // Tokenize the command into arguments
             char *args[MAX_ARGS];
             char *cmd1 = commands[i];
             cm= strtok(cmd1, " ");
@@ -250,17 +293,19 @@ void pipeC(char *i) {
                 args[arg_count++] = cm;
                 cm= strtok(NULL, " ");
             }
-            args[arg_count] = NULL; 
+            args[arg_count] = NULL; // Null-terminate the arguments
+            // Execute the command
             if (execvp(args[0], args) == -1) {
                 printf("Execvp error\n");
                 exit(EXIT_FAILURE);
             }
         }
     }
-
+    // Parent process closes all pipe ends
     for (int i = 0; i < 2 * (num_commands - 1); i++) {
         close(pipe_fd[i]);
     }
+    //If not background process than wait for child process to execute:
     int status;
     if(!background){
      for (int i = 0; i < num_commands-1; i++) {
@@ -270,7 +315,7 @@ void pipeC(char *i) {
             }
      }
     }
-
+    //calculating end time for command execuation
     clock_t end_time = clock();
     hst[cntr].cmd = malloc(strlen(cmdd) + 1);
     if (hst[cntr].cmd == NULL) {
@@ -285,13 +330,14 @@ void pipeC(char *i) {
     hst[cntr].initial_time = time(NULL);
     hst[cntr].duration = ((double)(end_time - start_time) / CLOCKS_PER_SEC);
     cntr++; 
-
+     //free malloc space
     for (int j = 0; j < num_commands; j++) {
         free(commands[j]);
     }
     free(cm);
 }
 
+//removing new line character
 int pipe_call(char i[]) {
     i[strcspn(i, "\n")] = 0;
     pipeC(i);
@@ -299,29 +345,36 @@ int pipe_call(char i[]) {
 }
 
 int main() {
+    //Signal handling
     int status;
     struct sigaction sig;
     memset(&sig, 0, sizeof(sig)); 
     sig.sa_handler = my_handler;
+    //Error check in handling signal
     if (sigaction(SIGINT, &sig, NULL) == -1) {
         printf("sigaction error\n");
         exit(EXIT_FAILURE);
     }
+    //Error check in handling signal
     if(sigaction(SIGCHLD,&sig,NULL)== -1){
         printf("sigaction error\n");
         exit(EXIT_FAILURE);
     }
+    //Main do-while loop
     do{
         char* command;
         command=malloc(500);
+        //Error check for malloc
         if(command==NULL){
             printf("Allocation not done\n");
             exit(EXIT_FAILURE);
         }
+        //reading user-input
         command=readline("gaur-garg-iiitd.ac:");
         if(command[0] == '\0'){
             continue;
         }
+        //checking wheather a piped command or not
         int bool = 0;
         int len = strlen(command);
         for (int i = 0; i < len; i++) {
@@ -331,14 +384,14 @@ int main() {
                 break;
             }
         }
-        
+        //removing new line character and replacing it with null character
         if (bool == 0) {
             if (len > 0 && command[len - 1] == '\n') {
                 command[len - 1] = '\0';
             }
             status = launch(command);
         }
-
+        // freeing space 
         if(command){
             free(command);
         }
