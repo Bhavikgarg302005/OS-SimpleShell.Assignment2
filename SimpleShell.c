@@ -371,6 +371,7 @@ int main() {
         }
         //reading user-input
         command=readline("gaur-garg-iiitd.ac:");
+        //if not entered anything again ask for it
         if(command[0] == '\0'){
             continue;
         }
